@@ -27,7 +27,7 @@ https.get("https://raw.githubusercontent.com/schemaorg/schemaorg/main/data/relea
                 if (node["@id"] == "schema:Integer") continue;
                 if (node["@id"] == "schema:Float") continue;
                 if (node["@id"] == "schema:URL") continue;
-                fs.writeFileSync("src/org/schema/" + node["@id"].split(":")[1] + ".js", codeGenerate(graph, node));
+                fs.writeFileSync("../src/org/schema/" + node["@id"].split(":")[1] + ".js", codeGenerate(graph, node));
             }
         }
     });
@@ -133,22 +133,80 @@ function codeGenerate(graph, node) {
             text += "\t" + gn["rdfs:label"][0]["@value"] + ";\n\n";
         }
     }
-    text += "}";
+    text += "}\n";
+    text += openapiGen(graph, node);
     return text;
+}
+
+function openapiGen(graph, node) {
+    let classId = node["@id"];
+    let className = classId.split(":")[1];
+    let text = "";
+    text += "/**\n";
+    text += " * @openapi\n";
+    text += " * components:\n";
+    text += " * \tschemas:\n";
+    text += ` * \t\t${className}:\n`;
+    text += " * \t\t\ttype: object\n";
+    text += ` * \t\t\tdescription: "A ${className.toLowerCase()} derived from ${classId.replace("schema:", "schema.org/")}"\n`
+    //alternative description: node["rdfs:comment"]
+    text += " * \t\t\tproperties:\n";
+    for (let i = 0; i < graph.length; i++) {
+        let gn = graph[i];
+        if (gn["rdfs:label"] != null && gn["rdfs:label"]["@value"] != null)
+            gn["rdfs:label"] = gn["rdfs:label"]["@value"]
+        /*let gi = gn["@id"];
+        let gt = gn["@type"];
+        let gd = gn["schema:domainIncludes"];
+        if (gt != "rdf:Property")
+            continue;
+        //console.log(gn);
+        if (gd == null)
+            continue;
+        //console.log(gd);
+        {
+            let ok = false;
+            for (let j = 0; j < gd.length; j++) {
+                if (gd[j]["@id"] == classId)
+                    ok = true;
+            }
+            if (!ok) continue;
+        }*/
+        let type = "";
+        if (gn["schema:rangeIncludes"]){
+            let gr = gn["schema:rangeIncludes"][0];
+            if (gr.toString().indexOf(",") == -1) {
+                type = gr["@id"].split(":")[1];
+            } else {
+                type = gr[0]["@id"].split(":");
+                /*for (let j = 0; j < gr.length; j++) {
+                    if (j > 0)
+                        type += " | ";
+                    type += gr[j]["@id"].split(":");
+                }*/
+            }
+        }
+        text += ` * \t\t\t\t${gn["rdfs:label"]}:\n`;
+        text += ` * \t\t\t\t\tdescription: ${gn["rdfs:comment"].replace(/(\r\n|\n|\r|\u2028)/gm, "").replace(/\s+/g, ' ')}\n`;
+        if (type)
+            text += ` * \t\t\t\t\t${sub(type)}\n`
+    }
+    text += "*/";
+    return text.replace(/(\t)/gm, "  ");
 }
 
 function sub(s) {
     if (s == "Text")
-        return "String";
-    if (s == "Number")
-        return "Double";
+        return "type: string";
+    if (s == "Number" || s == "Integer")
+        return "type: number";
     if (s == "URL")
-        return "String";
+        return "type: string";
     if (s == "DateTime")
-        return "String";
+        return "type: string";
     if (s == "Date")
-        return "String";
+        return "type: string";
     if (s == "Time")
-        return "String";
-    return s;
+        return "type: string";
+    return `$ref: '#/components/schemas/${s.toLowerCase()}'`;
 }
