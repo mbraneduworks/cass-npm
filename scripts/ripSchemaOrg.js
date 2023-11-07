@@ -27,6 +27,12 @@ https.get("https://raw.githubusercontent.com/schemaorg/schemaorg/main/data/relea
                 if (node["@id"] == "schema:Integer") continue;
                 if (node["@id"] == "schema:Float") continue;
                 if (node["@id"] == "schema:URL") continue;
+                let classId = node["@id"];
+                let className = classId.split(":")[1];
+                /*if (className == 'AboutPage') {
+                    fs.writeFileSync("../src/org/schema/" + node["@id"].split(":")[1] + ".js", codeGenerate(graph, node));
+                    break;
+                }*/
                 fs.writeFileSync("../src/org/schema/" + node["@id"].split(":")[1] + ".js", codeGenerate(graph, node));
             }
         }
@@ -38,7 +44,6 @@ https.get("https://raw.githubusercontent.com/schemaorg/schemaorg/main/data/relea
 function codeGenerate(graph, node) {
     let classId = node["@id"];
     let className = classId.split(":")[1];
-    //console.log(node);
     let text = "";
     text += "";
     text += "/**\n";
@@ -150,28 +155,17 @@ function openapiGen(graph, node) {
     text += " * \t\t\ttype: object\n";
     text += ` * \t\t\tdescription: "A ${className.toLowerCase()} derived from ${classId.replace("schema:", "schema.org/")}"\n`
     //alternative description: node["rdfs:comment"]
-    text += " * \t\t\tproperties:\n";
-    for (let i = 0; i < graph.length; i++) {
-        let gn = graph[i];
-        if (gn["rdfs:label"] != null && gn["rdfs:label"]["@value"] != null)
-            gn["rdfs:label"] = gn["rdfs:label"]["@value"]
-        /*let gi = gn["@id"];
-        let gt = gn["@type"];
-        let gd = gn["schema:domainIncludes"];
-        if (gt != "rdf:Property")
-            continue;
-        //console.log(gn);
-        if (gd == null)
-            continue;
-        //console.log(gd);
-        {
-            let ok = false;
-            for (let j = 0; j < gd.length; j++) {
-                if (gd[j]["@id"] == classId)
-                    ok = true;
-            }
-            if (!ok) continue;
-        }*/
+    text += " * \t\t\tallOf:\n";
+    if (node["rdfs:subClassOf"]) {
+        let subClassOf = node["rdfs:subClassOf"]["@id"];
+        text += ` * \t\t\t\t- $ref: '#/components/schemas/${subClassOf}'\n`
+    }
+    let properties = graph.filter((x) => { return x["@type"] == "rdf:Property" && 
+        Array.isArray(x["schema:domainIncludes"]) ? x["schema:domainIncludes"].findIndex((y) => y["@id"] == classId) != -1 : x["schema:domainIncludes"] && x["schema:domainIncludes"]["@id"] == classId});
+    if (properties.length != 0)
+        text += " * \t\t\t\t- properties:\n";
+    for (let i = 0; i < properties.length; i++) {
+        let gn = properties[i];
         let type = "";
         if (gn["schema:rangeIncludes"]){
             let gr = gn["schema:rangeIncludes"][0];
@@ -186,10 +180,10 @@ function openapiGen(graph, node) {
                 }*/
             }
         }
-        text += ` * \t\t\t\t${gn["rdfs:label"]}:\n`;
-        text += ` * \t\t\t\t\tdescription: ${gn["rdfs:comment"].replace(/(\r\n|\n|\r|\u2028)/gm, "").replace(/\s+/g, ' ')}\n`;
+        text += ` * \t\t\t\t\t\t${gn["rdfs:label"]}:\n`;
+        text += ` * \t\t\t\t\t\t\tdescription: ${gn["rdfs:comment"].replace(/(\r\n|\n|\r|\u2028)/gm, "").replace(/\s+/g, ' ')}\n`;
         if (type)
-            text += ` * \t\t\t\t\t${sub(type)}\n`
+            text += ` * \t\t\t\t\t\t\t${sub(type)}\n`
     }
     text += "*/";
     return text.replace(/(\t)/gm, "  ");
